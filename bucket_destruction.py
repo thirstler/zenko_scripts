@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 #!/usr/bin/python
 #
 # Multi-session clean-up of S3 buckets. Hopefully fast, absolutely bug free.
@@ -41,22 +40,22 @@ def _run_batch(args, ovs):
 
     ##
     # Objects and versions
-    try:
-        for ver in ovs["Versions"]:
-            if args.noncurrent and ver["IsLatest"]:
-                logme("skipping {0} ({1}".format(ver["Key"], ver["VersionId"]))
-                continue
-            objs["Objects"].append({"Key": ver["Key"], "VersionId": ver["VersionId"]})
-            logme("deleting {0} ({1}".format(ver["Key"], ver["VersionId"]))
-    except KeyError:
-        pass
-    except Exception as e:
-        sys.stderr.write(str(e))
+    if not args.skipobjects
+        try:
+            for ver in ovs["Versions"]:
+                if args.noncurrent and ver["IsLatest"]:
+                    logme("skipping {0} ({1}".format(ver["Key"], ver["VersionId"]))
+                    continue
+                objs["Objects"].append({"Key": ver["Key"], "VersionId": ver["VersionId"]})
+                logme("deleting {0} ({1}".format(ver["Key"], ver["VersionId"]))
+        except KeyError:
+            pass
+        except Exception as e:
+            sys.stderr.write(str(e))
 
     ##
     # Markers
     if not args.skipmarkers:
-
         try:
             for ver in ovs["DeleteMarkers"]:
                 objs["Objects"].append(
@@ -94,7 +93,7 @@ def zap_objects(args):
     s3 = session.client("s3", endpoint_url=args.endpoint)
 
     lspgntr = s3.get_paginator("list_object_versions")
-    page_iterator = lspgntr.paginate(Bucket=args.bucket, Prefix=args.prefix)
+    page_iterator = lspgntr.paginate(Bucket=args.bucket, Prefix=args.prefix, MaxKeys=args.maxkeys)
 
     wrkrcnt = 0
     for ovs in page_iterator:
@@ -161,6 +160,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--mpusonly", action="store_true", help="just clean up unfinished MPUs"
+    )
+    parser.add_argument(
+        "--skipobjects", action="store_true", help="Keep versioned objects when cleaning DeleteMarkers"
+    )
+    parser.add_argument(
+        "--maxkeys", default="1000", help="Number of keys to fetch per run"
     )
     parser.add_argument(
         "--workers",
