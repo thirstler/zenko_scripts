@@ -40,7 +40,7 @@ def _run_batch(args, ovs):
 
     ##
     # Objects and versions
-    if not args.skipobjects
+    if not args.skipobjects:
         try:
             for ver in ovs["Versions"]:
                 if args.noncurrent and ver["IsLatest"]:
@@ -165,7 +165,7 @@ if __name__ == "__main__":
         "--skipobjects", action="store_true", help="Keep versioned objects when cleaning DeleteMarkers"
     )
     parser.add_argument(
-        "--maxkeys", default="1000", help="Number of keys to fetch per run"
+        "--maxkeys", default=1000, type=int, help="Number of keys to fetch per run"
     )
     parser.add_argument(
         "--workers",
