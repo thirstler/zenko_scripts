@@ -68,7 +68,7 @@ def _run_batch(args, ovs):
             sys.stderr.write(str(e))
 
     if len(objs["Objects"]) == 0:
-        logme("no versions or markers to delete")
+        logme("nothing to remove")
     elif args.dryrun:
         logme("(skipping delete pass)")
     else:
@@ -156,16 +156,16 @@ if __name__ == "__main__":
         "--skipmarkers", action="store_true", help="skip deletion of delete markers"
     )
     parser.add_argument(
+        "--skipobjects", action="store_true", help="skip deletion of objects"
+    )
+    parser.add_argument(
         "--skipmpus", action="store_true", help="skip clean-up of unfinished MPUs"
     )
     parser.add_argument(
         "--mpusonly", action="store_true", help="just clean up unfinished MPUs"
     )
     parser.add_argument(
-        "--skipobjects", action="store_true", help="Keep versioned objects when cleaning DeleteMarkers"
-    )
-    parser.add_argument(
-        "--maxkeys", default=1000, type=int, help="Number of keys to fetch per run"
+        "--maxkeys", default=1000, type=int, help="number of keys to feed per worker"
     )
     parser.add_argument(
         "--workers",
