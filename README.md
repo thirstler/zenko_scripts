@@ -1,8 +1,7 @@
-Set of one-off scripts for dealing with Zenko
+Set of scripts for dealing with Zenko and S3
 
-bucket_destruction.py:  removes all versions, delete markers and unfinished 
-                        MPUs from a bucket. There's a script in S3Utils that 
-                        handles this but a python tool seems like a good idea
+bucket_destruction.py:  Fast and flexible bucket clean-up script that's handy
+                        for a number of situations. 
 
 crr_failure_trigger.py: This will send a mail to a configured address when 
                         there are multiple permanenet CRR failures to a 
