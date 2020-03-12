@@ -47,7 +47,7 @@ def _run_batch(args, ovs):
                     logme("skipping {0} ({1}".format(ver["Key"], ver["VersionId"]))
                     continue
                 objs["Objects"].append({"Key": ver["Key"], "VersionId": ver["VersionId"]})
-                logme("deleting {0} ({1}".format(ver["Key"], ver["VersionId"]))
+                logme("deleting {0} ({1})".format(ver["Key"], ver["VersionId"]))
         except KeyError:
             pass
         except Exception as e:
@@ -61,7 +61,7 @@ def _run_batch(args, ovs):
                 objs["Objects"].append(
                     {"Key": ver["Key"], "VersionId": ver["VersionId"]}
                 )
-                logme("deleting marker {0} ({1}".format(ver["Key"], ver["VersionId"]))
+                logme("deleting marker {0} ({1})".format(ver["Key"], ver["VersionId"]))
         except KeyError:
             pass
         except Exception as e:
