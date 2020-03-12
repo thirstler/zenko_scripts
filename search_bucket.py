@@ -159,8 +159,7 @@ def print_xml(xmltxt):
 
 def get_json(xmltxt):
     """
-    Parsing the DOM is stupid, so let's do this only once here and convert good
-    output to JSON everywhere else.
+    Parsing the DOM is stupid, so let's do that only once here.
     """
     xmlout = MD.parseString(xmltxt)
     output = {
@@ -293,7 +292,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--basename",
         action="store_true",
-        help="when downloading objects with prefixes, use only the basename of the key as the destination file name; colissions unhandled",
+        help="when downloading objects with prefixes, use only the basename of the key as the destination file name; collisions unhandled",
     )
     args = parser.parse_args()
 
