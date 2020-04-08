@@ -1,5 +1,5 @@
-#!/usr/bin/python
-#
+#!/usr/bin/python3
+
 # Multi-session clean-up of S3 buckets. Hopefully fast, absolutely bug free.
 import os
 import boto3
@@ -127,7 +127,6 @@ def zap_mpus(args):
                     s3.abort_multipart_upload(
                         Bucket=args.bucket, Key=mpu["Key"], UploadId=mpu["UploadId"]
                     )
-
 
 def logme(text):
     """ I know, right? """
