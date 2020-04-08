@@ -1,13 +1,22 @@
-Bucket clean-up and Zenko Search
-================================
-
-bucket_destruction.py:
-----------------------
-Fast and flexible bucket clean-up script that's useful for a number of situations.
+Utilities related to S3 and Scality Zenko
+=========================================
 
 search_bucket.py:
 -----------------
-Tool for searching Zenko bucket metadata using the search API.
+Command-line tool for using the Zenko search API on Zenko buckets.
+
+tagtool.py
+----------
+Command-line tool for mass-tagging of objects. Includes the ability to append
+tags, remove specific tags or simply apply tags. Takes input from a keylist
+file (or stdin).
+
+bucket_destruction.py:
+----------------------
+Bucket clean-up tool. Useful because you can target versions, markers or 
+everything independently. Works well for life-cycling versioned buckets. Also
+good for simply blowing everything away (objects and unfinished MPUs) for easy
+bucket removal.
 
 Odds and Ends
 =============
