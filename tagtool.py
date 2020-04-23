@@ -4,10 +4,10 @@ Tag tool can be used to mass-tag objects in buckets (or clear them) using a
 keylist as input (from a file or stdin). It can also append tags using any new
 tags in favor of existing key/value pairs where collisions exist.
 """
-import os, sys
+import os, sys, time
 import boto3
 import argparse
-from multiprocessing import Process
+import multiprocessing
 
 ##
 # Some defaults
@@ -22,6 +22,7 @@ def logme(level, text):
         print(text)
     elif level > 0 and DEBUG == True:
         print(text)
+
 
 def _cleartags(args, ovs, s3):
 
@@ -48,7 +49,10 @@ def _cleartags(args, ovs, s3):
 
         count += 1
 
-    logme(0, "{0} keys cleared".format(count))
+    logme(1, "{0} keys cleared".format(count))
+    
+    return count
+
 
 def _applytagging(args, ovs, s3):
     tagitems = args.tagging.split(",")
@@ -77,10 +81,15 @@ def _applytagging(args, ovs, s3):
             logme(1, "FAILED: {0} {1}".format(keyitem["Key"], str(response)))
         count += 1
 
-    logme(0, "{0} keys tagged".format(count))
+    logme(1, "{0} keys tagged".format(count))
+    return count
 
-def _merge_taglists(source_t, dest_t):
-    merged = source_t + dest_t
+
+def _merge_taglists(source_t, dest_t, noreplace=False):
+    if noreplace:
+        merged = dest_t + source_t
+    else:
+        merged = source_t + dest_t
     keys = []
     rdest = []
     for m in merged:
@@ -90,6 +99,7 @@ def _merge_taglists(source_t, dest_t):
             rdest.append(m)
         keys.append(m["Key"])
     return rdest
+
 
 def _retag(args, ovs, s3, append=False):
 
@@ -111,9 +121,9 @@ def _retag(args, ovs, s3, append=False):
                 logme(0, "error: {0} {1}".format(keyitem["Key"], str(e)))
                 continue
             break
-    
+
         if append:
-            tags["TagSet"] = _merge_taglists(a_tagset, tags["TagSet"])
+            tags["TagSet"] = _merge_taglists(a_tagset, tags["TagSet"], noreplace=args.noreplace)
 
         for r in range(RETRIES):
             try:
@@ -133,9 +143,12 @@ def _retag(args, ovs, s3, append=False):
             logme(1, "FAILED: {0} {1}".format(keyitem["Key"], str(response)))
         count += 1
 
-    logme(0, "{0} keys re-tagged".format(count))
+    logme(1, "{0} keys re-tagged".format(count))
 
-def _run_batch(args, ovs):
+    return count
+
+
+def _run_batch(args, ovs, wrkrcnt, mng_ret):
     """
     Page worker for relabeling
     """
@@ -144,17 +157,18 @@ def _run_batch(args, ovs):
 
     """ I dunno man, what are we doing here? """
     if args.cleartags:
-        _cleartags(args, ovs, s3)
+        count = _cleartags(args, ovs, s3)
 
     elif args.tagging != None:
-        _applytagging(args, ovs, s3)
+        count = _applytagging(args, ovs, s3)
 
     elif args.append != None:
-        _retag(args, ovs, s3, append=True)
-        
-    elif args.retag == True:
-        _retag(args, ovs, s3, append=False)
+        count = _retag(args, ovs, s3, append=True)
 
+    elif args.retag == True:
+        count = _retag(args, ovs, s3, append=False)
+
+    mng_ret[wrkrcnt] = count
 
 def from_file(args, fh):
     """
@@ -164,34 +178,61 @@ def from_file(args, fh):
     count = 0
     wrkrcnt = 0
     keylist = {"Contents": []}
+    manager = multiprocessing.Manager()
+    mng_ret = manager.dict()
+    tss = time.time()
+    tse = tss
+    ttlc = 0
+
     while True:
-        key = fh.readline().strip()
-        if not key:
-            break
+        key = fh.readline().strip() or break
+
         keylist["Contents"].append({"Key": key})
         if count >= args.maxkeys:
-            jobs.append(Process(target=_run_batch, args=(args, keylist)))
+            jobs.append(multiprocessing.Process(target=_run_batch, args=(args, keylist, wrkrcnt, mng_ret)))
             jobs[wrkrcnt].start()
             wrkrcnt += 1
             if wrkrcnt >= int(args.workers):
                 for job in jobs:
                     job.join()
+                tse = time.time()
                 wrkrcnt = 0
                 jobs = []
+            for c in mng_ret:
+                ttlc += mng_ret[c]
+
+            print("processed {0} keys in {1:.2f} sec".format(ttlc, (tse - tss)))
+
+            mng_ret = manager.dict()
             count = 0
             keylist = {"Contents": []}
         count += 1
-    
+
+
     # Stragglers and small operations
     for job in jobs:
         job.join()
-    _run_batch(args, keylist)
+
+    for c in mng_ret:
+        ttlc += mng_ret[c]
+
+    # the straggling stragglers
+    _run_batch(args, keylist, -1, mng_ret)
+
+    tse = time.time()
+    print("(final) processed {0} keys in {1:.2f} sec".format(ttlc + len(keylist["Contents"]), (tse - tss)))
 
 def tagbucket(args):
     """
     Bucket listing and worker distribution entry.
     """
     jobs = []
+    wrkrcnt = 0
+    manager = multiprocessing.Manager()
+    mng_ret = manager.dict()
+    tss = time.time()
+    tse = tss
+    ttlc = 0
 
     session = boto3.Session(profile_name=args.profile)
     s3 = session.client("s3", endpoint_url=args.endpoint)
@@ -201,16 +242,30 @@ def tagbucket(args):
         Bucket=args.bucket, Prefix=args.prefix, MaxKeys=args.maxkeys
     )
 
-    wrkrcnt = 0
     for ovs in page_iterator:
-        jobs.append(Process(target=_run_batch, args=(args, ovs)))
+        jobs.append(multiprocessing.Process(target=_run_batch, args=(args, ovs, wrkrcnt, mng_ret)))
         jobs[wrkrcnt].start()
         wrkrcnt += 1
         if wrkrcnt >= int(args.workers):
             for job in jobs:
                 job.join()
+            tse = time.time()
             wrkrcnt = 0
             jobs = []
+            for c in mng_ret:
+                ttlc += mng_ret[c]
+            mng_ret = manager.dict()
+            print("processed {0} keys in {1:.2f} sec".format(ttlc, (tse - tss)))
+
+    # Stragglers and small operations
+    for job in jobs:
+        job.join()
+    tse = time.time()
+
+    for c in mng_ret:
+        ttlc += mng_ret[c]
+
+    print("(final) processed {0} keys in {1:.2f} sec".format(ttlc, (tse - tss)))
 
 def just_go(args):
 
@@ -218,7 +273,7 @@ def just_go(args):
         tagbucket(args)
 
     elif args.input:
-        
+
         with open(args.input, "r") as fh:
             from_file(args, fh)
         fh.close()
@@ -226,6 +281,8 @@ def just_go(args):
     else:
         with sys.stdin as fh:
             from_file(args, fh)
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
@@ -253,7 +310,7 @@ if __name__ == "__main__":
         help="tag all keys in bucket (or prefix if supplied)",
     )
     parser.add_argument(
-        "--cleartags", action="store_true", help="clear all tags from objects"
+        "--cleartags", action="store_true", help="clear tags from objects"
     )
     parser.add_argument("--verbose", action="store_true", help="be noisy")
     parser.add_argument(
@@ -268,14 +325,20 @@ if __name__ == "__main__":
     parser.add_argument(
         "--tagging",
         default=None,
-        help="comma-delimited list of key=value tags to apply",
+        help="comma-delimited list of key=value pairs to apply",
         required=False,
     )
     parser.add_argument(
         "--append",
         default=None,
-        help="comma-delimited list of key=value tags to append to existing tags",
+        help="comma-delimited list of key=value pairs to append to existing tags (replacing values where keys already exist unless --noreplace is used)",
         required=False,
+    )
+    parser.add_argument(
+        "--noreplace",
+        action="store_true",
+        help="when using --append, keep the value of existing tags rather than overwritting them",
+        required=False
     )
     args = parser.parse_args()
 
