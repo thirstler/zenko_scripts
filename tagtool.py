@@ -170,6 +170,15 @@ def _run_batch(args, ovs, wrkrcnt, mng_ret):
 
     mng_ret[wrkrcnt] = count
 
+
+def a_key(args):
+
+    #try:
+    _run_batch(args,  {"Contents": [{"Key": args.key}]}, 0, {})
+    #except Exception as e:
+    #    print("barf: {0}".format(str(e)))
+    print("ok")
+
 def from_file(args, fh):
     """
     Start tagging jobs from file input
@@ -185,7 +194,8 @@ def from_file(args, fh):
     ttlc = 0
 
     while True:
-        key = fh.readline().strip() or break
+        key = fh.readline().strip()
+        if not key: break
 
         keylist["Contents"].append({"Key": key})
         if count >= args.maxkeys:
@@ -221,6 +231,7 @@ def from_file(args, fh):
 
     tse = time.time()
     print("(final) processed {0} keys in {1:.2f} sec".format(ttlc + len(keylist["Contents"]), (tse - tss)))
+
 
 def tagbucket(args):
     """
@@ -278,6 +289,9 @@ def just_go(args):
             from_file(args, fh)
         fh.close()
 
+    elif args.key:
+        a_key(args)
+
     else:
         with sys.stdin as fh:
             from_file(args, fh)
@@ -308,6 +322,12 @@ if __name__ == "__main__":
         "--wholebucket",
         action="store_true",
         help="tag all keys in bucket (or prefix if supplied)",
+    )
+    parser.add_argument(
+        "--key",
+        default=None,
+        help="just process a single key (shouldn't you be using awscli or something?)",
+        required=False,
     )
     parser.add_argument(
         "--cleartags", action="store_true", help="clear tags from objects"
