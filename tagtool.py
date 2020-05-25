@@ -1,8 +1,7 @@
 #!/usr/bin/python3
 """
 Tag tool can be used to mass-tag objects in buckets (or clear them) using a 
-keylist as input (from a file or stdin). It can also append tags using any new
-tags in favor of existing key/value pairs where collisions exist.
+keylist as input (from a file or stdin). It can also append and merge tags.
 """
 import os, sys, time
 import boto3
@@ -15,6 +14,7 @@ PROFILE_DEF = "default"
 DEBUG = False
 WORKERS = 5
 RETRIES = 5
+
 
 def logme(level, text):
     """ level == 0 is always logged, level == 1 logged during debug """
@@ -50,7 +50,7 @@ def _cleartags(args, ovs, s3):
         count += 1
 
     logme(1, "{0} keys cleared".format(count))
-    
+
     return count
 
 
@@ -123,7 +123,9 @@ def _retag(args, ovs, s3, append=False):
             break
 
         if append:
-            tags["TagSet"] = _merge_taglists(a_tagset, tags["TagSet"], noreplace=args.noreplace)
+            tags["TagSet"] = _merge_taglists(
+                a_tagset, tags["TagSet"], noreplace=args.noreplace
+            )
 
         for r in range(RETRIES):
             try:
@@ -148,7 +150,7 @@ def _retag(args, ovs, s3, append=False):
     return count
 
 
-def _run_batch(args, ovs, wrkrcnt, mng_ret):
+def _run_batch(args, ovs):
     """
     Page worker for relabeling
     """
@@ -168,16 +170,13 @@ def _run_batch(args, ovs, wrkrcnt, mng_ret):
     elif args.retag == True:
         count = _retag(args, ovs, s3, append=False)
 
-    mng_ret[wrkrcnt] = count
+    # mng_ret[wrkrcnt] += count
 
 
 def a_key(args):
 
-    #try:
-    _run_batch(args,  {"Contents": [{"Key": args.key}]}, 0, {})
-    #except Exception as e:
-    #    print("barf: {0}".format(str(e)))
-    print("ok")
+    _run_batch(args, {"Contents": [{"Key": args.key}]}, 0, {})
+
 
 def from_file(args, fh):
     """
@@ -187,50 +186,50 @@ def from_file(args, fh):
     count = 0
     wrkrcnt = 0
     keylist = {"Contents": []}
-    manager = multiprocessing.Manager()
-    mng_ret = manager.dict()
     tss = time.time()
     tse = tss
     ttlc = 0
 
     while True:
         key = fh.readline().strip()
-        if not key: break
+        if not key:
+            break
 
         keylist["Contents"].append({"Key": key})
+
+        # We have enough keys to run a job
         if count >= args.maxkeys:
-            jobs.append(multiprocessing.Process(target=_run_batch, args=(args, keylist, wrkrcnt, mng_ret)))
+            jobs.append(
+                multiprocessing.Process(target=_run_batch, args=(args, keylist))
+            )
             jobs[wrkrcnt].start()
             wrkrcnt += 1
+
+            # We've hit worker count and need to wait
             if wrkrcnt >= int(args.workers):
                 for job in jobs:
                     job.join()
                 tse = time.time()
                 wrkrcnt = 0
                 jobs = []
-            for c in mng_ret:
-                ttlc += mng_ret[c]
 
-            print("processed {0} keys in {1:.2f} sec".format(ttlc, (tse - tss)))
+                logme(0, "processed {0} keys in {1:.2f} sec".format(ttlc, (tse - tss)))
 
-            mng_ret = manager.dict()
             count = 0
             keylist = {"Contents": []}
-        count += 1
 
+        ttlc += 1
+        count += 1
 
     # Stragglers and small operations
     for job in jobs:
         job.join()
 
-    for c in mng_ret:
-        ttlc += mng_ret[c]
-
     # the straggling stragglers
-    _run_batch(args, keylist, -1, mng_ret)
+    _run_batch(args, keylist)
 
     tse = time.time()
-    print("(final) processed {0} keys in {1:.2f} sec".format(ttlc + len(keylist["Contents"]), (tse - tss)))
+    logme(0, "(final) processed {0} keys in {1:.2f} sec".format(ttlc, (tse - tss)))
 
 
 def tagbucket(args):
@@ -239,8 +238,6 @@ def tagbucket(args):
     """
     jobs = []
     wrkrcnt = 0
-    manager = multiprocessing.Manager()
-    mng_ret = manager.dict()
     tss = time.time()
     tse = tss
     ttlc = 0
@@ -254,8 +251,13 @@ def tagbucket(args):
     )
 
     for ovs in page_iterator:
-        jobs.append(multiprocessing.Process(target=_run_batch, args=(args, ovs, wrkrcnt, mng_ret)))
+
+        jobs.append(multiprocessing.Process(target=_run_batch, args=(args, ovs)))
         jobs[wrkrcnt].start()
+        try:
+            ttlc += len(ovs["Contents"])
+        except:
+            pass
         wrkrcnt += 1
         if wrkrcnt >= int(args.workers):
             for job in jobs:
@@ -263,20 +265,15 @@ def tagbucket(args):
             tse = time.time()
             wrkrcnt = 0
             jobs = []
-            for c in mng_ret:
-                ttlc += mng_ret[c]
-            mng_ret = manager.dict()
-            print("processed {0} keys in {1:.2f} sec".format(ttlc, (tse - tss)))
+            logme(0, "processed {0} keys in {1:.2f} sec".format(ttlc, (tse - tss)))
 
     # Stragglers and small operations
     for job in jobs:
         job.join()
     tse = time.time()
 
-    for c in mng_ret:
-        ttlc += mng_ret[c]
+    logme(0, "(final) processed {0} keys in {1:.2f} sec".format(ttlc, (tse - tss)))
 
-    print("(final) processed {0} keys in {1:.2f} sec".format(ttlc, (tse - tss)))
 
 def just_go(args):
 
@@ -358,7 +355,7 @@ if __name__ == "__main__":
         "--noreplace",
         action="store_true",
         help="when using --append, keep the value of existing tags rather than overwritting them",
-        required=False
+        required=False,
     )
     args = parser.parse_args()
 
