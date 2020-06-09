@@ -303,11 +303,13 @@ if __name__ == "__main__":
 
     location_info = bucket_location(args)
 
-    if "LocationConstraint" in location_info:
-        region = location_info["LocationConstraint"]
-    else:
-        sys.stderr.write("bucket does not exist? exiting.\n")
+    if "LocationConstraint" not in location_info:
+        sys.stderr.write("can't get location info; does the bucket exist?\n")
         sys.exit(1)
+
+    region = location_info["LocationConstraint"]
+    if region == None:
+        region = "us-east-1"
 
     creds = get_profile(args.profile)
     epdata = parse_endpoint(args.endpoint)
