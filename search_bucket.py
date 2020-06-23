@@ -1,6 +1,6 @@
 #!/usr/bin/python3
-# Command-line search tool that uses the Zenko metadata search API. Search your
-# buckets with Python the way God intended. No boutique imports.
+# Command-line search tool that uses the Zenko metadata search API.
+# https://zenko.readthedocs.io/en/latest/operation/Metadata_Search/Metadata_Search.html
 import sys, os, base64, hashlib, urllib, hmac, argparse, requests, configparser, boto3, json
 import xml.dom.minidom as MD
 from datetime import datetime
@@ -10,7 +10,7 @@ from boto3.s3.transfer import TransferConfig
 def get_profile(profile):
     """
     Just open the ~/.aws/credentials file and get the creds, this is
-    easier than digging from boto
+    easier than digging around in boto3
     """
     config = configparser.ConfigParser()
     config.read("{0}/.aws/credentials".format(os.environ["HOME"]))
@@ -65,7 +65,7 @@ def getSignatureKey(key, dateStamp, regionName, serviceName):
 
 def bucket_location(args):
     """
-    Get bucket location so we can query it, we load-up boto3 just for this. :-)
+    Get bucket location so we can query it (we load-up boto3 just for this).
     """
     session = boto3.Session(profile_name=args.profile)
     s3 = session.client("s3", endpoint_url=args.endpoint)
@@ -294,6 +294,12 @@ if __name__ == "__main__":
         action="store_true",
         help="when downloading objects with prefixes, use only the basename of the key as the destination file name; collisions unhandled",
     )
+    parser.add_argument(
+        "--maxkeys",
+        default="2000",
+        help="max keys to return per page"
+    )
+
     args = parser.parse_args()
 
     # CA bundles are only configurable via environment
@@ -301,21 +307,24 @@ if __name__ == "__main__":
         os.environ["AWS_CA_BUNDLE"] = args.cabundle
         os.environ["REQUESTS_CA_BUNDLE"] = args.cabundle
 
+    # Figure out bucket location and deal with the consiquences
     location_info = bucket_location(args)
 
     if "LocationConstraint" not in location_info:
         sys.stderr.write("can't get location info; does the bucket exist?\n")
-        sys.exit(1)
+        sys.exit(1) # if this happens, it's likely the bucket isn't there
 
     region = location_info["LocationConstraint"]
     if region == None:
-        region = "us-east-1"
+        region = "us-east-1" # Default region when there is none
 
     creds = get_profile(args.profile)
     epdata = parse_endpoint(args.endpoint)
     query_items = {"search": args.query, "max-keys": "2000"}
     marker = ""
-    isTruncated = True  # Let's get this party started
+    isTruncated = True 
+    
+    # Let's get this party started
     while isTruncated == True:
         if marker != "":
             query_items["marker"] = marker
