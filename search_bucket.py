@@ -320,7 +320,7 @@ if __name__ == "__main__":
 
     creds = get_profile(args.profile)
     epdata = parse_endpoint(args.endpoint)
-    query_items = {"search": args.query, "max-keys": "2000"}
+    query_items = {"search": args.query, "max-keys": args.maxkeys}
     marker = ""
     isTruncated = True 
     
