@@ -17,12 +17,11 @@ RETRIES = 5
 
 
 def just_go(args):
-    """
-    Ever wonder why some people create wrapper functions with only a couple of
-    lines? I don't.
-    """
+    ''' Wrapper - are we cleaning up MPUs are not?'''
+    
     if args.mpusonly != True:
         zap_objects(args)
+
     if args.skipmpus != True:
         zap_mpus(args)
 

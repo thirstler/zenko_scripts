@@ -1,13 +1,62 @@
 #!/bin/bash
 
 MKLVS="Y"             # Make the Linux LVs
-PV_DEV="/dev/vdb1"    # Space delimited device list
-VGNAME="metalvg"      # Will create this VG if it doesn't exist
-NODES="metal-01 metal-02 metal-03" # (short) host name
+PV_DEV=""    # Space delimited device list
+VGNAME=""      # Will create this VG if it doesn't exist
+NODES=""              # (short) host name
 
-# Use DOMAIN if domain is part of node names
-DOMAIN="galaxy.lab" 
-#DOMAIN=""
+while getopts ":n:v:" opt; do
+  case ${opt} in
+    n )
+        # Comma delimited list of nodes
+        NODES=$OPTARG
+        ;;
+    v )
+        # Name of volume group to create
+        VGNAME=$OPTARG
+        ;;
+    p )
+        # Physical device list to include in volume group
+        PV_DEV=$OPTARG
+        ;;
+    m )
+        # Skip volume creation all together
+        MKLVS='N'
+        ;;
+    \? )
+        echo "Usage: cmd [-n:] [-v:] [-p:] [-d:] [-m]"
+        echo "  -n  comma-delimited list of node names"
+        echo "  -v  name of volume group to create on each host"
+        echo "  -p  physical device list. If this is different on each host then"
+        echo "      you will need create the volume groups by hand and use the"
+        echo "      -m flag here to skip volume group creation"
+        echo "  -m  skip volume group creation"
+        ;;
+  esac
+done
+
+if [ "$MKVLS" = "Y" ]; then
+    DIE=0
+    [ "$VGNAME" = "" ] || DIE="a VG name"
+    [ "$PV_DEV" = "" ] || DIE="a PV list"
+    if [ "$DIE" != "0" ]; then
+        echo "you're missing ${DIE}, exiting"
+        exit 1
+    fi
+
+    if [ -d "/dev/${VGNAME}" && "$MKLVS" = "Y" ]; then
+        echo "volume group \"${VGNAME}\" exists, skipping volume creation "
+        MKLVS="N"
+    fi
+fi
+
+exit 0
+
+if [ "$NODES" = "" ;; then
+    ehco "You need a node list"
+    exit 1
+fi
+
 
 LV_MONGO="zenko-mongo"
 LV_PROMETHEUS="zenko-prometheus"
