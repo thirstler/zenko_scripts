@@ -1,11 +1,11 @@
 #!/usr/bin/python3
 # Command-line search tool that uses the Zenko metadata search API.
 # https://zenko.readthedocs.io/en/latest/operation/Metadata_Search/Metadata_Search.html
+
 import sys, os, base64, hashlib, urllib, hmac, argparse, requests, configparser, boto3, json
 import xml.dom.minidom as MD
 from datetime import datetime
 from boto3.s3.transfer import TransferConfig
-
 
 def get_profile(profile):
     """
@@ -31,9 +31,9 @@ def get_profile(profile):
 
     return {"access_key": access_key, "secret_key": secret_key}
 
-
 def parse_endpoint(endpointstr):
-    """ divied endpoint into useable parts """
+    """ divide endpoint into useable parts """
+
     proto = endpointstr[: endpointstr.find("//") - 1]
 
     hostport = endpointstr[(endpointstr.find("//") + 2) :]
@@ -75,7 +75,6 @@ def bucket_location(args):
 
 def location_noboto():
     pass
-
 
 # God forgive me for the sheer number of positional arguments
 def get_signed_headers(
